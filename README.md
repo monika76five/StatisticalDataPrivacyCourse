@@ -1,1 +1,2 @@
-# StatisticalDataPrivacy
+# Statistical Data Privacy course
+
