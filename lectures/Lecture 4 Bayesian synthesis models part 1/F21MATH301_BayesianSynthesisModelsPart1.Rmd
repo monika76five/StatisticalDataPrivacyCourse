@@ -1,0 +1,541 @@
+---
+title: Bayesian Synthesis Models part 1
+author: Jingchen (Monika) Hu 
+institute: Vassar College
+date: Statistical Data Privacy
+output:
+  beamer_presentation:
+    includes:
+      in_header: ../LectureStyle.tex
+slide_level: 2
+fontsize: 11pt
+bibliography: ../book.bib
+
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+```
+
+```{r message = FALSE, echo = FALSE}
+require(smoothmest)
+require(dplyr)
+require(readr)
+require(ggplot2)
+require(coda)
+require(gridExtra)
+require(brms)
+require(bayesplot)
+```
+
+## Outline
+
+\tableofcontents[hideallsubsections]
+
+
+# Introduction
+
+## Recap
+
+- Lecture 1 Overview of synthetic data: various aspects of creating synthetic data for microdata privacy protection
+
+\pause
+
+- Lectures 2 \& 3 Introduction to Bayesian modeling: nuts and bolts of Bayesian modeling
+    - The foundation of Bayesian inference: prior, likelihood, Bayes' rule (discrete and continuous), and posterior
+    - Markov chain Monte Carlo (MCMC): estimation and diagnostics
+    - Posterior predictive and synthetic data
+    - Case study: gamma-Poisson conjugate model, Poisson regression model, posterior prediction, prior choices, posterior inference, MCMC, MCMC diagnostics, using the ```brms``` package
+
+## Synthesis approaches 
+
+- Two general approaches to synthetic data creation
+    - Sequential synthesis
+    - Joint synthesis
+
+\vspace{2mm}
+
+- Sequential synthesis
+    - More commonly used and easier to estimate
+    - The main focus of this lecture and next
+
+\pause
+    
+- Joint synthesis
+    - Less commonly used and usually more challenging to estimate
+    - The DPMPM model for multivariate nominal categorical data (@HuReiterWang2014PSD), next lecture
+
+## The CE sample
+
+- Our sample is from the 1st quarter of 2019, containing five variables on 5133 CUs
+
+| Variable Name | Variable information                                  |
+| :------------ | :---------------------------------------------------- |
+| UrbanRural    | Binary; the urban / rural status of CU: 1 = Urban, 2 = Rural. |
+| Income        | Continuous; the amount of CU income before taxes in past 12 months (in $USD$). |
+| Race          | Categorical; the race category of the reference person: 1 = White, 2 = Black, 3 =                        Native American, 4 = Asian, 5 = Pacific Islander, 6 = Multi-race.  |
+| Expenditure   | Continuous; CU's total expenditures in last quarter (in $USD$).  |
+| KidsCount     | Count; the number of CU members under age 16. |
+
+
+
+## The CE sample 
+
+```{r message = FALSE, warning = FALSE}
+CEdata <- readr::read_csv(file = "CEdata.csv")
+CEdata[1:3, ]
+```
+
+## Plan for this lecture
+
+- Synthesis models for continuous outcome variables (e.g., Expenditure and Income)
+
+\vspace{2mm}
+
+- Synthesis models for binary outcome variables (e.g., UrbanRural)
+
+
+# Synthesing continuous variables
+
+## Log transformation
+
+- Suppose we want to use the Income variable to perform a partial synthesis for Expenditure
+
+- Both Income and Expenditure are highly skewed, we apply the logarithm transformation for both in our model building, creating two new variables: LogIncome and LogExpenditure
+
+```{r size = "footnotesize"}
+CEdata$LogIncome <- log(CEdata$Income)
+CEdata$LogExpenditure <- log(CEdata$Expenditure)
+```
+
+## A Bayesian simple linear regression: model specification
+
+- $Y_i$ is LogExpenditure and $X_i$ is LogIncome for CU $i$
+
+- A Bayesian simple linear regression model:
+\begin{eqnarray}
+Y_i &\overset{ind}{\sim}& \textrm{Normal}(\mu_i, \sigma) \\
+\mu_i &=& \beta_0 + \beta_1 X_i
+\end{eqnarray}
+
+\pause
+
+- The *expected* LogExpenditure of CU $i$ is $\mu_i$, which is a linear function of LogIncome $X_i$ through the **intercept parameter** $\beta_0$ and the **slope parameter** $\beta_1$
+
+
+\textcolor{blue}{Discussion question}: How would you interpret the intercept $\beta_0$ and the slope $\beta_1$ in this CE context?
+
+## A Bayesian simple linear regression: model estimation
+
+- We use the ```brms``` R package to estimate our chosen Bayesian simple linear regression model
+
+\pause
+
+- We will obtain pre-specified number of **posterior parameter draws** from the output, a process similar to what we have seen for the bike sharing rental case study
+
+- These posterior parameter draws will be used for synthetic data generation through the **posterior predictive distribution**
+
+## A Bayesian simple linear regression: model estimation
+
+- Make sure to install and load the ```brms``` library
+
+```{r size = "footnotesize"}
+library(brms)
+```
+
+- To streamline our synthesis process, we create the **design matrix** $\boldsymbol{X}$ based on the chosen model
+
+```{r size = "footnotesize"}
+SLR_ff <- stats::as.formula(LogExpenditure ~ 1 + LogIncome)
+SLR_model <- stats::model.frame(SLR_ff, CEdata)
+SLR_X <- data.frame(stats::model.matrix(SLR_ff, SLR_model))
+```
+
+## A Bayesian simple linear regression: model estimation
+
+- We use the **default priors**
+
+- The information of default priors can be extracted by the ```get_prior()``` function
+
+```{r size = "footnotesize"}
+brms::get_prior(data = CEdata,
+                family = gaussian,
+                LogExpenditure ~ 1 + LogIncome)
+```
+
+## A Bayesian simple linear regression: model estimation
+
+- We use ```family = gaussian``` in the ```brm()``` function to fit the simple linear regression model
+
+```{r size = "footnotesize", results = 'hide', message = FALSE, warning = FALSE}
+SLR_fit <- brms::brm(data = CEdata,
+                     family = gaussian,
+                     LogExpenditure ~ 1 + LogIncome,
+                     iter = 5000, 
+                     warmup = 3000, 
+                     thin = 1, 
+                     chains = 1, 
+                     seed = 539)
+```
+
+## A Bayesian simple linear regression: model estimation
+
+- The key to applying Bayesian synthesis models is to save posterior parameter draws of estimated parameters
+
+- These draws will be used to generate synthetic data given the posterior predictive distribution
+
+- We use the ```posterior_samples()``` function to retrieve the posterior parameter draws in ```post_SLR``` 
+
+```{r size = "footnotesize", message = FALSE, warning = FALSE}
+post_SLR <- brms::posterior_samples(x = SLR_fit)
+post_SLR[1:3, ]
+```
+
+\textcolor{blue}{Discussion question}: What is the dimension of ```post_SLR```?
+
+## A Bayesian simple linear regression: MCMC diagnostics
+
+
+```{r size = "footnotesize", eval = FALSE}
+bayesplot::mcmc_trace(x = SLR_fit, 
+                      pars = c("b_Intercept", "b_LogIncome", "sigma"))
+bayesplot::mcmc_acf(x = SLR_fit, 
+                    pars = c("b_Intercept", "b_LogIncome", "sigma"))
+```
+
+\textcolor{blue}{Discussion question}: What are being plotted by the commands above? What features of the plots indicate issues with convergence? What remedies do you have to improve the MCMC convergence?
+
+## A Bayesian simple linear regression: synthesis
+
+- To predict the LogExpenditure, $Y_i^*$ for a CU given its LogIncome, $X_i$ and a set of parameter draws, denoted as $\{\beta_0^*, \beta_1^*, \sigma^*\}$:
+
+\begin{equation}
+Y_i^* \mid \beta_0^*, \beta_1^*, \sigma^* \overset{ind}{\sim} \textrm{Normal}(\beta_0^* + \beta_1^* X_i, \sigma^*).
+\end{equation}
+
+
+## A Bayesian simple linear regression: synthesis
+
+- Now for each of the $n$ CUs, we create a predicted value
+
+\begin{eqnarray*}
+\text{compute}\,\, E[Y_1^*] = \beta_0^* + \beta_1^* X_1 &\rightarrow& \text{sample}\,\, Y_1^* \sim {\textrm{Normal}}(E[Y_1^*], \sigma^*)\\
+&\vdots& \\
+\text{compute}\,\, E[Y_i^*] = \beta_0^* + \beta_1^* X_i &\rightarrow& \text{sample}\,\, Y_i^* \sim {\textrm{Normal}}(E[Y_i^*], \sigma^*)\\
+&\vdots& \\
+\text{compute}\,\, E[Y_n^*] = \beta_0^* + \beta_1^* X_n &\rightarrow& \text{sample}\,\, Y_n^* \sim {\textrm{Normal}}(E[Y_n^*], \sigma^*)\\
+\end{eqnarray*}
+
+## A Bayesian simple linear regression: synthesis
+
+- Suppose we use one set of posterior draws at the ```index``` iteration of the MCMC
+
+```{r size = "footnotesize"}
+SLR_synthesize <- function(X, post_draws, index, n, seed){
+  set.seed(seed)
+  mean_Y <- as.matrix(X) %*% 
+    t(data.matrix(post_draws[index, c("b_Intercept", "b_LogIncome")]))
+  synthetic_Y <- stats::rnorm(n, mean_Y, post_draws[index, "sigma"])
+  data.frame(X, synthetic_Y)
+}
+```
+
+\textcolor{blue}{Dicussion question}: What are the inputs and outputs of this ```SLR_synthesize()``` function?
+
+## A Bayesian simple linear regression: synthesis
+
+- Perform synthesis for the CE dataset
+
+```{r size = "footnotesize", message = FALSE, warning = FALSE}
+n <- nrow(CEdata)
+SLR_synthetic_one <- SLR_synthesize(X = SLR_X, 
+                                    post_draws = post_SLR, 
+                                    index = 1, 
+                                    n = nrow(SLR_X),
+                                    seed = 246)
+names(SLR_synthetic_one) <- c("Intercept", "LogIncome", "LogExpenditure")
+```
+
+## A Bayesian simple linear regression: utility check
+
+```{r eval = TRUE, echo = FALSE, warning = FALSE, message = FALSE, fig.height = 3, fig.width = 6}
+df <- data.frame(confidential = CEdata$LogExpenditure, 
+                 synthetic = SLR_synthetic_one$LogExpenditure)
+df_long <- reshape2::melt(df)
+
+ggplot2::ggplot(data = df_long, aes(value, colour = variable, linetype = variable)) +
+  geom_density() + 
+  scale_colour_manual(values = c("#E69F00", "#999999"),
+                      guide = guide_legend(override.aes = list(
+                        linetype = c(1, 2)))) + 
+  scale_linetype_manual(values = c(1, 2), guide = FALSE) + 
+  ggtitle("Density plots of LogExpenditure") + 
+  xlab("LogExpenditure") + 
+  theme_bw(base_size = 15, base_family = "") +
+  theme(legend.title = element_blank())
+```
+
+## A Bayesian simple linear regression: $m > 1$ synthetic datasets
+
+```{r, eval = FALSE, size = "footnotesize"}
+n <- nrow(CEdata)
+m <- 20
+SLR_synthetic_m <- vector("list", m)
+for (l in 1:m){
+  SLR_synthetic_one <- SLR_synthesize(X = SLR_X, 
+                                      post_draws = post_SLR, 
+                                      index = 1980 + l, 
+                                      n = nrow(SLR_X),
+                                      seed = m + l)
+  names(SLR_synthetic_one) <- c("Intercept", "LogIncome", "LogExpenditure")
+  SLR_synthetic_m[[l]] <- SLR_synthetic_one
+}
+```
+
+## A Bayesian multiple linear regression: overview
+
+- Model expression 
+\begin{eqnarray}
+Y_i &\overset{ind}{\sim}& \textrm{Normal}(\mu_i, \sigma) \\
+\mu_i &=& \beta_0 + \beta_1 X_{i1} + \cdots + \beta_r X_{ir}
+\end{eqnarray}
+
+- Design matrix
+
+```{r, size = "footnotesize"}
+MLR_2vars_ff <- stats::as.formula(LogExpenditure ~ 1 + LogIncome + 
+                                    as.factor(Race))
+MLR_2vars_model <- stats::model.frame(MLR_2vars_ff, CEdata)
+MLR_2vars_X <- data.frame(stats::model.matrix(MLR_2vars_ff, 
+                                              MLR_2vars_model))
+```
+
+\textcolor{blue}{Discussion question}: What are the predictors in this model?
+
+# Synthesizing binary variables
+
+## A Bayesian logistic regression: overview
+
+- Binary outcome variables
+    - labor participation (0 or 1)
+    - loan default (yes or no)
+    - UrbanRural in our CE sample
+
+\pause
+
+- When modeling a binary outcome variable, regular linear regression models would not work (linear regression models are used to model continuous outcome variables through a normal data model)
+
+- The idea of modeling the outcome variable as a function of predictor variables in linear regression can be extended to modeling other types of outcome variables 
+    - Categorical and count will be covered later
+
+## A Bayesian logistic regression: model specification
+
+- When working with a binary outcome variable, $Y_i$, we can think of it as a **Bernoulli random variable**:
+\begin{equation}
+Y_i \overset{ind}{\sim} \textrm{Bernoulli}(p_i)
+\end{equation}
+where $p_i$ is the success probability of observation $i$ taking $Y_i = 1$
+
+- $p_i \in (0, 1)$
+
+\pause
+
+- The **odds**, $p_i / 1 - p_i$ is then a positive, continuous quantity
+- If we take its log, $\log\left(p_i / 1 - p_i\right)$, typically known as the **log odds**, we have an unknown continuous quantity which is on the real line, i.e., $\log\left(p_i / 1 - p_i\right) \in (-\infty, \infty)$
+- This log odds, also known as the **logit of $p_i$**, $\log\left(p_i / 1 - p_i\right)$, can then be modeled as a linear function of predictor variables
+
+## A Bayesian logistic regression: model specification
+
+- Assume $r$ predictor variables, $X_{i1}, \cdots, X_{ir}$
+- A linear function of $X_i$ for the logit of $p_i$ can be expressed as:
+\begin{equation}
+\textrm{logit}(p_i) = \log\left(\frac{p_i}{1 - p_i}\right) = \beta_0 + \beta_1 X_{i1} + \cdots + \beta_r X_{ir}
+\end{equation}
+with $r + 1$ parameters, $\{\beta_0, \cdots, \beta_r\}$
+
+\pause
+
+- $p_i$ is fixed once $\{\beta_0, \cdots, \beta_r\}$ are known, therefore not considered as a parameter
+
+- From a Bayesian perspective, we specify prior distributions for $\{\beta_0, \cdots, \beta_r\}$ and from MCMC estimation, we obtain posterior draws of these parameters
+
+## A Bayesian logistic regression: synthesis details
+
+- Once posterior draws of parameters $\{\beta_0, \cdots, \beta_r\}$ are available, we can then simulate a posterior predictive draw of $Y_i^*$ given predictor variable $X_i$ and a set of posterior parameter draws, denoted as $\{\beta_0^*, \cdots, \beta_r^*\}$:  
+\begin{eqnarray}
+\textrm{logit}(p_i^*) &=& \log\left(\frac{p_i^*}{1 - p_i^*}\right) = \beta_0^* + \beta_1^* X_{i1} + \cdots + \beta_r^* X_{ir},  \\
+Y_i^* &\overset{ind}{\sim}& \textrm{Bernoulli}(p_i^*). 
+\end{eqnarray}
+
+## A Bayesian logistic regression: synthesis details
+
+- Note that to calculate $p_i^*$ from $\beta_0^*, \cdots, \beta_r^*$ and $X_i$, we need the following algebra transformation
+
+\begin{eqnarray}
+\textrm{log}\left(\frac{p_i^*}{1 - p_i^*}\right) &=&  \beta_0^* + \beta_1^* X_{i1} + \cdots + \beta_r^* X_{ir} \nonumber \\ 
+\frac{p_i^*}{1 - p_i^*} &=& \exp(\beta_0^* + \beta_1^* X_{i1} + \cdots + \beta_r^* X_{ir})  \nonumber \\
+p_i^* &=& \frac{\exp(\beta_0^* + \beta_1^* X_{i1} + \cdots + \beta_r^* X_{ir})}{1 + \exp(\beta_0^* + \beta_1^* X_{i1} + \cdots + \beta_r^* X_{ir})} 
+\end{eqnarray}
+
+## A Bayesian logistic regression: synthesis details
+
+- For notation simplicity, we let $p_i^* = h(\beta_0^*, \cdots, \beta_r^*, \boldsymbol{X}_i)$ represent the previous expression, where $\boldsymbol{X}_i$ is the vector of predictors for observation $i$
+
+- Then to simulate synthetic values for all $n$ observations using the following procedure
+
+\begin{eqnarray*}
+\text{compute}\,\, p_1^* = h(\beta_0^*, \cdots, \beta_r^*, \boldsymbol{X}_1) &\rightarrow& \text{sample}\,\, Y_1^* \sim {\textrm{Bernoulli}}(p_1^*)\\
+&\vdots& \\
+\text{compute}\,\, p_i^* = h(\beta_0^*, \cdots, \beta_r^*, \boldsymbol{X}_i) &\rightarrow& \text{sample}\,\, Y_i^* \sim {\textrm{Bernoulli}}(p_i^*)\\
+&\vdots& \\
+\text{compute}\,\, p_n^* = h(\beta_0^*, \cdots, \beta_r^*, \boldsymbol{X}_n) &\rightarrow& \text{sample}\,\, Y_n^* \sim {\textrm{Bernoulli}}(p_n^*)\\
+\end{eqnarray*}
+
+- This process creates one synthetic binary vector $(Y_i^*)_{i = 1, \cdots, n}$
+
+
+## A Bayesian logistic regression: model estimation
+
+- We wish to synthesize binary UrbanRural with continuous LogExpenditure as the single predictor
+
+- UrbanRural is coded as 1 = Urban and 2 = Rural: we need to create a 0 / 1 version of $Y_i$ as $\tilde{Y}_i = Y_i - 1$
+
+\begin{eqnarray}
+\tilde{Y}_i \mid p_i &\overset{ind}{\sim}& \textrm{Bernoulli}(p_i) \\
+\textrm{logit}(p_i) &=& \log\left(\frac{p_i}{1 - p_i}\right) = \beta_0 + \beta_1 X_i
+\end{eqnarray}
+
+\textcolor{blue}{Discussion question}: Is $\tilde{Y}_i = 0$ referring to an urban CU or rural CU?
+
+## A Bayesian logistic regression: model estimation
+
+- To streamline our synthesis process, we create the **design matrix** $\boldsymbol{X}$ based on the chosen model
+
+```{r size = "footnotesize"}
+logistic_ff <- stats::as.formula((UrbanRural - 1) ~ 1 + LogExpenditure)
+logistic_model <- stats::model.frame(logistic_ff, CEdata)
+logistic_X <- data.frame(stats::model.matrix(logistic_ff, logistic_model))
+```
+
+\pause
+
+- We use the **default priors**
+
+## A Bayesian logistic regression: model estimation
+
+- We use ```family = bernoulli(link = "logit")``` in the ```brm()``` function to fit the logistic regression model
+
+```{r size = "footnotesize", results = 'hide', message = FALSE, warning = FALSE}
+logistic_fit <- brms::brm(data = CEdata,
+                          family = bernoulli(link = "logit"),
+                          (UrbanRural - 1) ~ 1 + LogExpenditure,
+                          iter = 5000, 
+                          warmup = 3000, 
+                          thin = 1, 
+                          chains = 1, 
+                          seed = 720)
+```
+
+## A Bayesian logistic regression: model estimation
+
+- The key to applying Bayesian synthesis models is to save posterior parameter draws of estimated parameters
+
+- These draws will be used to generate synthetic data given the posterior predictive distribution
+
+- We use the ```posterior_samples()``` function to retrieve the posterior parameter draws in ```post_logistic``` 
+
+```{r size = "footnotesize", message = FALSE, warning = FALSE}
+post_logistic <- brms::posterior_samples(x = logistic_fit)
+post_logistic[1:3, ]
+```
+
+
+## A Bayesian logistic regression: MCMC diagnostics
+
+
+- Don't forget to do them!
+
+
+## A Bayesian logistic regression: synthesis
+
+- Suppose we use one set of posterior draws at the ```index``` iteration of the MCMC
+
+```{r size = "footnotesize"}
+logistic_synthesize <- function(X, post_draws, index, n, seed){
+  set.seed(seed)
+  log_p <- as.matrix(X) %*% 
+    t(data.matrix(post_draws[index, c("b_Intercept", "b_LogExpenditure")]))
+  p <- exp(log_p) / (1 + exp(log_p))
+  synthetic_Y <- stats::rbinom(n, size = 1, prob = p) + 1
+  data.frame(X, synthetic_Y)
+}
+```
+
+\textcolor{blue}{Dicussion question}: What are the inputs and outputs of this ```SLR_synthesize()``` function?
+
+## A Bayesian logistic regression: synthesis
+
+- Perform synthesis for the CE dataset
+
+```{r size = "footnotesize", message = FALSE, warning = FALSE}
+n <- nrow(CEdata)
+logistic_synthetic_one <- logistic_synthesize(X = logistic_X, 
+                                              post_draws = post_logistic,
+                                              index = 1, 
+                                              n = nrow(logistic_X),
+                                              seed = 902)
+names(logistic_synthetic_one) <- c("Intercept", "LogExpenditure", 
+                                   "UrbanRural")
+```
+
+## A Bayesian logistic regression: utility check
+
+```{r eval = TRUE, echo = FALSE, warning = FALSE, message = FALSE, fig.height = 3, fig.width = 6}
+df <- data.frame(confidential = CEdata$UrbanRural, 
+                 synthetic = logistic_synthetic_one$UrbanRural)
+df_long <- reshape2::melt(df)
+
+ggplot2::ggplot(data = df_long, aes(x = value, fill = variable)) +
+  geom_histogram(binwidth = 0.5, position = position_dodge()) +  
+  scale_fill_manual(values = c("#E69F00", "#999999")) + 
+  ggtitle("Confidential UrbanRural vs synthetic UrbanRural") + 
+  xlab("UrbanRural") + 
+  theme_bw(base_size = 15, base_family = "") +
+  theme(legend.title = element_blank()) 
+```
+
+
+# Summary and References
+
+## Summary
+
+- Synthesizing continuous outcome variables
+    - Bayesian simple / multiple linear regressions
+
+- Synthesizing binary outcome variables
+    - Bayesian logistic regression
+
+- In both cases
+    - Prior (default priors in ```brms```)
+    - MCMC estimation and diagnostics
+    - Posterior predictions for synthetic data generation (writing R functions)
+    - Simple utility checks
+    
+\pause
+
+- Homework 4: a few R programming exercises
+     - Submission on Moodle and prepare to discuss next time
+
+- Lecture 5: Bayesian synthesis models part 2: categorical, count (sequential synthesis), and DPMPM
+    - Section 3 of @Kinney2011ISR
+    - Section 2 of @HuReiterWang2014PSD
+    
+    
+## References {.allowframebreaks} 
+

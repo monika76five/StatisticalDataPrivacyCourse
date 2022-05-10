@@ -1,0 +1,66 @@
+\documentclass[11pt]{article}
+\usepackage[top=2.1cm,bottom=2cm,left=2cm,right= 2cm]{geometry}
+%\geometry{landscape}                % Activate for for rotated page geometry
+\usepackage[parfill]{parskip}    % Activate to begin paragraphs with an empty line rather than an indent
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{epstopdf}
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{hyperref}
+\usepackage{changepage}
+\usepackage{lscape}
+\usepackage{ulem}
+\usepackage{multicol}
+\usepackage{dashrule}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{enumerate}
+\newcommand{\urlwofont}[1]{\urlstyle{same}\url{#1}}
+\newcommand{\degree}{\ensuremath{^\circ}}
+\newcommand{\hl}[1]{\textbf{\underline{#1}}}
+
+
+
+\DeclareGraphicsRule{.tif}{png}{.png}{`convert #1 `dirname #1`/`basename #1 .tif`.png}
+
+\newenvironment{choices}{
+\begin{enumerate}[(a)]
+}{\end{enumerate}}
+
+%\newcommand{\soln}[1]{\textcolor{MidnightBlue}{\textit{#1}}}	% delete #1 to get rid of solutions for handouts
+\newcommand{\soln}[1]{ \vspace{1.35cm} }
+
+%\newcommand{\solnMult}[1]{\textbf{\textcolor{MidnightBlue}{\textit{#1}}}}	% uncomment for solutions
+\newcommand{\solnMult}[1]{ #1 }	% uncomment for handouts
+
+%\newcommand{\pts}[1]{ \textbf{{\footnotesize \textcolor{black}{(#1)}}} }	% uncomment for handouts
+\newcommand{\pts}[1]{ \textbf{{\footnotesize \textcolor{blue}{(#1)}}} }	% uncomment for handouts
+
+\newcommand{\note}[1]{ \textbf{\textcolor{red}{[#1]}} }	% uncomment for handouts
+
+\begin{document}
+
+
+\enlargethispage{\baselineskip}
+
+Fall 2021 \hfill Jingchen (Monika) Hu\\
+
+\begin{center}
+{\huge MATH 301 Homework 3}	\\
+Due: Sunday 9/26, 11:59pm; submission on Moodle under Discussion Forum
+\end{center}
+\vspace{0.5cm}
+
+\begin{enumerate}
+\item In class we talked about Monte Carlo simulation and the role of $S$, the number of simulations, in the context of the gamma-Poisson conjugate model fitted to the bike sharing dataset. We used $S = 1000$ in class. Try values of $S = \{10, 100, 1000, 10000\}$, calculate the approximated mean and variance of $\textrm{Gamma}(22928, 501)$, and compare them to the analytical solutions of 57.2470 and 0.2281. Comment on the effect of $S$ on the accuracy of the approximations.
+
+
+\item In class, we discussed that when the prior statements are not provided in \textrm{brm()} function, default priors will be used. Use the \textrm{get\_prior()} function from the \textrm{brms} package to check out what default priors are used in this case (you can type in the console \textrm{?get\_prior} to access the help function). Use this default prior choice and perform the same Bayesian inference, including prediction. Report your findings and discuss the influence of the two priors in our Poisson regression model with temperature as the predictor variable.
+
+\item Consider a Poisson regression model with two predictor variables: temperature and season. Note that season is a categorical predictor variable, which requires a slope for each level and the use of \textrm{as.factor(season)} syntax. First visualize their relationships (e.g., color-coded scatterplot) and discuss your conjecture of the usefulness of each predictor. Use \textrm{brms} with default priors to perform MCMC estimation and check MCMC diagnostics. Summarize the posterior estimation of each parameter and check the predictions. Discuss whether the predictions have improved compared to a Poisson regression model with only one predictor variable, the temperature.
+
+\end{enumerate}
+
+Be prepared to discuss these questions in class on Monday 9/27.
+
+\end{document} 

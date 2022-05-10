@@ -1,0 +1,125 @@
+---
+title: Introduction
+author: Jingchen (Monika) Hu 
+institute: Vassar College
+date: Statistical Data Privacy
+output:
+  beamer_presentation:
+    includes:
+      in_header: ../LectureStyle.tex
+slide_level: 2
+fontsize: 11pt
+
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Outline
+
+\tableofcontents[hideallsubsections]
+
+
+# Course orientation
+## General info
+\begin{tabular}{ p{2cm} p{8cm} }
+{\underline{Instructor:}}		& Jingchen (Monika) Hu - {jihu@vassar.edu} \\
+				& RH 403  \\
+				& \\	
+%{\underline{Stats Intern:}}		& Baian Liu (senior) -  \webLink{mailto:baliu@vassar.edu}{{baliu@vassar.edu}} \\
+%                & \\
+{\underline{Lecture:}}		&  Mondays 3:10-5:10pm \\
+                & RH 308 \\
+				& \\
+{\underline{Lab:}}			& Some lectures will be used as labs.\\
+                & \\
+{\underline{Office hours:}} & Tuesday 9:00am-11:00am \& Thursday 2:00pm-4:00pm, or by appointment. \\ 
+                & Note that the first hour is in person in RH 403 and the second half is on Zoom at https://vassar.zoom.us/j/9108856270. \\
+                & \\
+%{\underline{TAs:}} & Dahlia Forte, Lucas Krishan, and Henrik Olsson \\ 
+                & \\
+\end{tabular}
+
+## Required materials
+
+\begin{tabular}{ p{2cm} p{8cm} }
+{\underline{Prerequisite:}} &  MATH 242 or any of the 300-level statistics courses, and interests in statistical data privacy\\
+                & \\
+
+{\underline{Readings:}} 	&  A collection of selected journal articles and manuscripts \\
+			& \\	
+{\underline{Software:}}    & We will use the software R/RStudio for labs and project. Download R from \href{http://www.r-project.org/}{\textit{http://www.r-project.org/}} and RStudio, from \href{https://www.rstudio.com/}{\textit{https://www.rstudio.com/}} \\
+            & \\
+
+{\underline{Webpage:}} & Vassar's Moodle: tentative schedule, slides, references, datasets, R scripts...\\
+\end{tabular}
+
+## Course topics
+
+- Overview of \underline{synthetic data}
+
+- Introduction to Bayesian modeling
+
+- Bayesian synthesis models: continuous, binary, categorical, and count
+
+- Evaluation of synthetic data
+    - data utility
+    - disclosure risks
+
+- Overview of \underline{differential privacy} (DP)
+    - basics
+    - mechanisms
+    
+- DP for common statistics: descriptive statistics and regressions
+
+
+## Course components
+
+- Two parts of material: \underline{synthetic data, differential privacy}
+
+\pause
+
+- Each part is a combination of a selection of the following: readings, lectures, labs, homework, discussions (in-class and online), and project
+
+\pause
+
+- The course project (individual or in pair) is a final product, using either synthetic data method or differential privacy method to provide privacy protection of a dataset of your interest
+
+\pause
+
+- Weekly check-ins (due every Sunday 11:59pm EST on Moodle)
+
+## Course project
+
+- Find a dataset and demonstrate disclosure risks
+
+- Design and implement protection methods
+
+- Evaluate protection methods
+  
+- Write a paper and present the results
+    
+\vspace{5mm}
+
+## Course project examples from previous semester
+
+- Protecting income information in the National Health Interview Survey (NHIS)
+
+- Protecting individual's privacy (political opinion) in the AP VoteCast 
+
+- Protecting price and available days information of Airbnb listings in New York City
+
+- Protecting individual's privacy (demographics) in the STEM Labor Force survey
+
+\pause
+
+You can find recordings of these projects and other projects at (towards the end of the playlist): https://www.youtube.com/playlist?list=PL_lWxa4iVNt0XPY0E0MDuGhKvbq_767mr
+
+\pause 
+
+Questions? Ideas to discuss and share?
+
+
+

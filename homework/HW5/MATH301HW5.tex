@@ -1,0 +1,65 @@
+\documentclass[11pt]{article}
+\usepackage[top=2.1cm,bottom=2cm,left=2cm,right= 2cm]{geometry}
+%\geometry{landscape}                % Activate for for rotated page geometry
+\usepackage[parfill]{parskip}    % Activate to begin paragraphs with an empty line rather than an indent
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{epstopdf}
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{hyperref}
+\usepackage{changepage}
+\usepackage{lscape}
+\usepackage{ulem}
+\usepackage{multicol}
+\usepackage{dashrule}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{enumerate}
+\newcommand{\urlwofont}[1]{\urlstyle{same}\url{#1}}
+\newcommand{\degree}{\ensuremath{^\circ}}
+\newcommand{\hl}[1]{\textbf{\underline{#1}}}
+
+
+
+\DeclareGraphicsRule{.tif}{png}{.png}{`convert #1 `dirname #1`/`basename #1 .tif`.png}
+
+\newenvironment{choices}{
+\begin{enumerate}[(a)]
+}{\end{enumerate}}
+
+%\newcommand{\soln}[1]{\textcolor{MidnightBlue}{\textit{#1}}}	% delete #1 to get rid of solutions for handouts
+\newcommand{\soln}[1]{ \vspace{1.35cm} }
+
+%\newcommand{\solnMult}[1]{\textbf{\textcolor{MidnightBlue}{\textit{#1}}}}	% uncomment for solutions
+\newcommand{\solnMult}[1]{ #1 }	% uncomment for handouts
+
+%\newcommand{\pts}[1]{ \textbf{{\footnotesize \textcolor{black}{(#1)}}} }	% uncomment for handouts
+\newcommand{\pts}[1]{ \textbf{{\footnotesize \textcolor{blue}{(#1)}}} }	% uncomment for handouts
+
+\newcommand{\note}[1]{ \textbf{\textcolor{red}{[#1]}} }	% uncomment for handouts
+
+\begin{document}
+
+
+\enlargethispage{\baselineskip}
+
+Fall 2021 \hfill Jingchen (Monika) Hu\\
+
+\begin{center}
+{\huge MATH 301 Homework 5}	\\
+Due: Sunday 10/10, 11:59pm; submission on Moodle under Discussion Forum
+\end{center}
+\vspace{0.5cm}
+
+\begin{enumerate}
+\item The utility result of our synthesized Race in class seem to suggest that there might exist more suitable predictor variables for Race compared to our chosen LogIncome. Experiment with LogExpenditure in the CE sample and report your findings. 
+
+\item Create $m = 20$ synthetic datasets with synthesized KidsCount. First, write an R script to create $m = 20$ synthetic datasets with synthesized KidsCount and the unsynthesized LogIncome and synthesized LogExpenditure (from a linear regression synthesis model given LogIncome from last lecture) as the two predictors, following the synthesis R script covered in class and the example R script of generating $m > 1$ synthetic datasets for Expenditure covered in last class. Next, apply the written script to generate $m = 20$ synthetic datasets with synthesized KidsCount, save it as a list, and create histograms of confidential and synthetic KidsCount for the first 3 synthetic datasets (all on one plot). Discuss whether the generated synthetic datasets vary from each other and how these results inform us about the necessity of simulating multiple $m > 1$ synthetic datasets. [Hint: You need to create the synthetic design matrix for the second step modeling in the loop over $m = 20$ since that design matrix depends on the synthetic predictor simulated from the first step.]
+
+\item Use the DPMPM model with the \texttt{NPBayesImputeCat} R package, create $m = 5$ partially synthetic datasets of the ACS sample where \texttt{MIG} and \texttt{HISP} are synthesized. Check the MCMC diagnostics of \texttt{kstar} and the utility results of synthesized \texttt{MIG} vs confidential \texttt{MIG} and those for \texttt{HISP} using appropriate functions from the \texttt{NPBayesImputeCat} R package.
+
+\end{enumerate}
+
+Be prepared to discuss these questions in class on Monday 10/11.
+
+\end{document} 

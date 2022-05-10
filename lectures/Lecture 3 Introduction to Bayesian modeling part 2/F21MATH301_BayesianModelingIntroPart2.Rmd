@@ -1,0 +1,634 @@
+---
+title: Introduction to Bayesian Modeling part 2
+author: Jingchen (Monika) Hu 
+institute: Vassar College
+date: Statistical Data Privacy
+output:
+  beamer_presentation:
+    includes:
+      in_header: ../LectureStyle.tex
+slide_level: 2
+fontsize: 11pt
+bibliography: ../book.bib
+
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+```
+
+```{r message = FALSE, echo = FALSE}
+require(smoothmest)
+require(dplyr)
+require(readr)
+require(ggplot2)
+require(coda)
+require(gridExtra)
+require(brms)
+require(bayesplot)
+```
+
+## Outline
+
+\tableofcontents[hideallsubsections]
+
+
+# Recap
+
+## From part 1 lecture
+
+- The foundation of Bayesian inference
+    - Prior
+    - Likelihood
+    - Bayes' rule (discrete and continuous) and posterior
+
+- Markov chain Monte Carlo (MCMC)
+    - Estimation
+    - Diagnostics
+
+# Posterior predictive and synthetic data
+
+## Posterior predictive
+
+- One important type of statistical inference is making predictions
+
+- Bayesian methods: through the **posterior predictive distribution**
+
+Let $Y^*$ be the random variable for the predicted value, and $y$ be the observed value. Let $\theta$ represent the model parameter(s). The posterior predictive distribution is
+\begin{equation}
+\pi(Y^* = y^* \mid y) = \int f(y^* \mid \theta) \pi(\theta \mid y)d\theta.
+\end{equation}
+
+## Beta-binomial example
+
+- In the beta-binomial conjugate model, the posterior predictive distribution is analytically available
+
+\begin{eqnarray}
+\pi(Y^* = y^* \mid y) &=& \int_{0}^{1} f(y^* \mid p) \pi(p \mid y)dp \nonumber \\
+&=& {n^* \choose y^*} \frac{B(y^* + a + y, b + n - y + n^* - y^*)}{B(a + y, b + n - y)},
+\end{eqnarray}
+where $n^*$ is the fixed number of trials in the prediction (usually $n^* = n$), and $a$ and $b$ are the parameters for the beta prior for $p$
+
+\pause 
+
+- This is a known distribution, the **beta-binomial distribution** with parameters $n^*$, $a$ and $b$
+
+- The ```rbetabinom.ab()``` function in the ```VGAM``` R package can simulate from a beta-binomial distribution (@VGAM)
+
+## When ppd is not readily available
+
+The general steps for making posterior predictions if ppd is not readily available:
+
+1. Extract the posterior draws of all parameters from MCMC estimation at one iteration (after convergence)
+
+2. Sample one or more predicted data points from the data model using the extracted posterior parameter draws
+
+## Normal example
+
+To make a prediction of $Y^*$ at MCMC iteration $s$, i.e., generate one predicted value:
+
+1. Extract $\{\mu^s, \sigma^s\}$ from estimated MCMC chain after diagnostic checks
+
+2. Sample $Y^* \sim \textrm{Normal}(\mu^s, \sigma^s)$
+
+
+## Synthetic data 
+
+- Recall Overview of synthetic data lecture...
+
+\vspace{3mm}
+
+- Generating synthetic data from Bayesian models for privacy protection is in essence equivalent to generating posterior predictions from estimated Bayesian models
+    - chosen Bayesian models are fitted and estimated on the confidential data,
+    - synthetic values of confidential data are generated from the posterior predictive distributions
+
+## Bayesian models and utility
+
+- If the selected Bayesian models are suitable for the confidential data at hand, the posterior predictions (i.e., simulated synthetic data) will resemble the confidential data, indicating high utility
+
+\vspace{3mm}
+
+- If not, then we should consider building more sophisticated models for the confidential data to achieve better posterior predictions.
+
+
+# Case study: bike sharing rental counts
+
+## The dataset
+
+- A sample dataset about bike sharing rentals in Washington D.C. from @BikeShareData
+
+- Bike rentals information for 250 work days in 2012, including total count and other information
+
+```{r message = FALSE, warning = FALSE}
+bikesharing_data <- readr::read_csv(file = "bikeshare.csv")
+bikesharing_data[1:3, ]
+```
+
+
+## The data dictionary
+
+| Variable name | Variable information                                  |
+| :-------------- | :---------------------------------------------------- |
+| season        | Categorical; 4 levels: spring, summer, and winter. |
+| weather       | Categorical; 1 =  clear, few clouds, partly cloudy, 2 = mist + cloudy, mist + broken clouds, mist + few clouds, mist, 3 = light snow, light rain + thunderstorm + scattered clouds, light rain + scattered clouds, 4 = heavy rain + ice pallets + thunderstorm + mist, snow + fog. |
+| temperature   | Continuous; Normalized feeling temperature in Celsius. The values are divided to 50 (max).  |
+| humidity   | Continuous; Normalized humidity. The values are divided to 100 (max).  |
+| windspeed  | Continuous; Normalized wind speed. The values are divided to 67 (max). |
+| count      | Count; Count (in 100s) of total bike rentals including both casual and registered. |
+
+## Some inferential questions
+
+- Suppose we are interested in modeling and making inference about the count variable in this bike sharing rentals dataset
+
+- \textcolor{blue}{Discussion question}: What kind of inferential questions you might have given this dataset and the variables it contains?
+
+## What we attempt to answer in this lecture
+
+- First, we introduce the basic setup of using a Poisson model for count data, where we only know about the daily counts but none of the additional information such as temperature
+
+\pause 
+
+- Next, we deal with the situation where some additional information becomes available, such as temperature, and how a Poisson regression model is built up for taking into account that bike rentals might vary with the daily temperature
+
+\vspace{3mm}
+
+- In each stage
+    - model setup and prior choices
+    - computing techniques for posterior estimation (MCMC)
+    - making posterior predictions
+
+## A gamma-Poisson conjugate model: Poisson data model
+
+- The Poisson distribution is a **one-parameter distribution**, commonly used to model count data
+
+- It is a discrete distribution, where any sampled draw is a non-negative integer, i.e., a count
+
+The probability mass function of $\textrm{Poisson}(\lambda)$ is:
+\begin{equation}
+Pr(Y = y \mid \lambda) = \frac{\lambda^y \exp(-\lambda)}{y!}, y\in\{0, 1, 2, \cdots\}, \lambda > 0,
+\end{equation}
+where $y$ is an observed count and $\lambda$ is the rate parameter. The mean and variance of $Y \sim \textrm{Poisson}(\lambda)$ are both $\lambda$.
+
+
+## A gamma-Poisson conjugate model: Poisson data model
+
+
+- If we know the value of $\lambda$, say $\lambda = 5$, we can get the probability of obtaining a count of, say 8, by calculating 
+\begin{equation}
+Pr(Y = 8 \mid \lambda = 5) = \frac{\lambda^y \exp(-\lambda)}{y!} = \frac{5^8 \exp(-5)}{8!} = 0.065.
+\end{equation} 
+
+\pause
+
+- In R, we can get it using the ```dpois()``` function, which returns the density (probability mass function) value
+
+```{r}
+stats::dpois(x = 8, lambda = 5)
+```
+
+
+## A gamma-Poisson conjugate model: Poisson data model
+
+```{r eval = TRUE, echo = FALSE, fig.height = 3, fig.width = 6}
+ggplot2::ggplot(data.frame(y = c(0:30)), aes(y)) + 
+  stat_function(geom = "point", n = 31, fun = dpois, 
+                args = list(lambda = 5), aes(color = "Pois(5)", shape = "Pois(5")) +
+  stat_function(geom = "point", n = 31, fun = dpois, 
+                args = list(lambda = 10), aes(color = "Pois(10)", shape = "Pois(10")) + 
+  stat_function(geom = "point", n = 31, fun = dpois, 
+                args = list(lambda = 15), aes(color = "Pois(15)", shape = "Pois(15")) +
+  scale_colour_manual(values = c("#0072B2", "#D55E00", "#CC79A7"),
+                      guide = guide_legend(override.aes = list(
+                        shape = c(1, 2, 3)))) + 
+  scale_shape_manual(values = c(1, 2, 3), guide = FALSE) + 
+  ylab("Density") +
+  theme_bw(base_size = 12, base_family = "", ) + 
+  theme(legend.title = element_blank()) +
+  theme(legend.position = c(0.8, 0.6)) +
+  annotate("point", x = 8, y = 0.065, colour = "#CC79A7", size = 5, shape = 4)
+```
+
+- The peak value increases as $\lambda$ increases (about mean)
+- The spread increases as $\lambda$ increases (about variance)
+
+
+## A gamma-Poisson conjugate model: the likelihood function
+
+- We propose to work with a Poisson model for each count, that is:
+\begin{equation}
+Y_i \mid \lambda \overset{i.i.d.}{\sim} \textrm{Poisson}(\lambda), 
+\end{equation}
+where $i = 1, \cdots, n$ and $n$ is the total number of observations ($n = 250$ in our sample)
+
+- Our data model assumes that each day's bike sharing rental count is **identically and independently distributed (i.i.d.)** according to $\textrm{Poisson}(\lambda)$
+
+## A gamma-Poisson conjugate model: the likelihood function
+
+- We can write out the **joint probability mass function** of $n$ observations as:
+\begin{equation}
+Pr(Y_1 = y_1, \cdots, Y_n = y_n \mid \lambda) = \prod_{i=1}^{n}\frac{\lambda^{y_i} \exp(-\lambda)}{{y_i}!} = \frac{\lambda^{\sum_{i=1}^{n}y_i}\exp(-n\lambda)}{\prod_{i=1}^{n}y_i!}.
+\end{equation}
+
+\pause
+
+- From this, the likelihood function of $\lambda$ can be then expressed as:
+\begin{equation}
+L(\lambda) = \frac{\lambda^{\sum_{i=1}^{n}y_i}\exp(-n\lambda)}{\prod_{i=1}^{n}y_i!} \propto \lambda^{\sum_{i=1}^{n}y_i}\exp(-n\lambda).
+\end{equation}
+
+- As mentioned last time, the likelihood function is a function of the unknown parameter(s)
+
+- Since $\{y_1, \cdots, y_n\}$ are observed, they can be simplified into the proportional sign
+
+\pause
+
+- Bayesian inference: we assume $\lambda$ is unknown and we will give a prior distribution for it
+
+## A gamma-Poisson conjugate model: a gamma prior
+
+- The gamma distribution is a two-parameter continuous distribution
+
+- It takes positive values, and therefore is commonly used for modeling positive quantities
+    - the rate parameter in a Poisson data model
+    - the precision parameter (i.e., the reciprocal of the variance parameter) in a normal data model
+
+\pause
+
+The probability density function of $\textrm{Gamma}(a, b)$ is:
+\begin{equation}
+f(\lambda) = \frac{b^a}{\Gamma(a)}\lambda^{a - 1} \exp(-b\lambda), \lambda > 0, a > 0, b > 0,
+\end{equation}
+where $a$ is the shape parameter and $b$ is the rate parameter. The mean and variance of $\lambda \sim \textrm{Gamma}(a, b)$ are $a / b$ and $a / b^2$ respectively
+
+## A gamma-Poisson conjugate model: a gamma prior
+
+```{r eval = TRUE, echo = FALSE, fig.height = 3, fig.width = 6}
+ggplot2::ggplot(data.frame(lambda = c(0, 10)), aes(lambda)) + 
+  stat_function(fun = dgamma, args = list(shape = 1, rate = 1), 
+                aes(color = "Gamma(1, 1)", linetype = "Gamma(1, 1)")) +
+  stat_function(fun = dgamma, args = list(shape = 6, rate = 4), 
+                aes(color = "Gamma(6, 4)", linetype = "Gamma(6, 4)")) + 
+  stat_function(fun = dgamma, args = list(shape = 4, rate = 6), 
+                aes(color = "Gamma(4, 6)", linetype = "Gamma(4, 6)")) +
+  scale_colour_manual(values = c("#0072B2", "#D55E00", "#CC79A7"),
+                      guide = guide_legend(override.aes = list(
+                        shape = c(1, 2, 3)))) + 
+  scale_linetype_manual(values = c(1, 2, 3), guide = FALSE) + 
+  xlab(expression(lambda)) + ylab("Density") +
+  theme_bw(base_size = 12, base_family = "") +
+  theme(legend.position = c(0.8, 0.6)) +
+  theme(legend.title = element_blank())
+```
+
+- $\textrm{Gamma}(1, 1)$ is a common prior choice when we do not have much prior information (**weakly informative priors**)
+
+## A gamma-Poisson conjugate model: posterior derivation
+
+- Continuous Bayes' rule
+
+- The joint likelihood function of $\lambda$:
+
+\begin{equation*}
+L(\lambda) = \frac{\lambda^{\sum_{i=1}^{n}y_i}\exp(-n\lambda)}{\prod_{i=1}^{n}y_i!} \propto \lambda^{\sum_{i=1}^{n}y_i}\exp(-n\lambda). 
+\end{equation*}
+
+- The prior density of $\lambda$ using $\textrm{Gamma}(a,b)$:
+
+\begin{equation*}
+\pi(\lambda) = \frac{b^a}{\Gamma(a)}\lambda^{a - 1} \exp(-b\lambda) \propto \lambda^{a - 1} \exp(-b\lambda),
+\end{equation*}
+where we put known quantities $1 / \prod_{i=1}^{n}y_i!$, $b^a$, and $\Gamma(a)$ into the proportional sign
+
+- \textcolor{blue}{Discussion question}: Can you derive the posterior to be $\textrm{Gamma}(a + \sum_{i=1}^{n}y_i, b + n)$?
+
+## A gamma-Poisson conjugate model: conjugacy theorem
+
+For a Poisson data model where $Y_1, \cdots, Y_n \overset{iid}{\sim} \textrm{Poisson}(\lambda),$ a $\textrm{Gamma}(a, b)$ prior for $\lambda$ gives a $\textrm{Gamma}(a + \sum_{i=1}^{n}y_i, b + n)$ posterior.
+
+
+## A gamma-Poisson conjugate model: posterior mean
+
+- We can express the **posterior mean**, that is the mean of $\textrm{Gamma}(a + \sum_{i=1}^{n}y_i, b + n)$ as:
+\begin{equation}
+\frac{a + \sum_{i=1}^{n}y_i}{b + n} = \frac{b}{b + n} \times \frac{a}{b} + \frac{n}{b + n} \times \frac{\sum_{i=1}^ny_i}{n} = \frac{b}{b + n} \times \frac{a}{b} + \frac{n}{b + n} \times \bar{y},
+\end{equation}
+where $a / b$ and $\bar{y}$ are the **prior mean** and the **sample mean**, respectively
+
+\pause
+
+- The posterior mean as a **weighted average** of the prior mean and the sample mean, with weight $b / (b + n)$ for the prior and $n / (b + n)$ for the data sample
+
+\pause
+
+- Given fixed $b$, the larger the value of $n,$ the stronger the influence of the data on the posterior; similarly, given fixed $n$, the larger the value of $b$, the stronger the influence of the prior on the posterior
+
+
+## A gamma-Poisson conjugate model: prior influence
+
+```{r eval = TRUE, echo = FALSE, fig.height = 3, fig.width = 6}
+n <- nrow(bikesharing_data)
+sum_y <- sum(bikesharing_data$count)
+a1 <- 400
+b1 <- 10
+a2 <- 4000
+b2 <- 100
+
+ggplot2::ggplot(data.frame(lambda = c(20, 60)), aes(lambda)) + 
+  stat_function(fun = dgamma, args = list(shape = a1, rate = b1),
+                aes(color = "Prior 1: Gamma(400, 10)", linetype = "Prior 1: Gamma(400, 10)")) +
+  stat_function(fun = dgamma, args = list(shape = a2, rate = b2),
+                aes(color = "Prior 2: Gamma(4000, 100)", linetype = "Prior 2: Gamma(4000, 100)")) +
+  stat_function(fun = dgamma, args = list(shape = a1 + sum_y, 
+                                          rate = b1 + n), 
+                aes(color = "Posterior 1", linetype = "Posterior 1")) +
+  stat_function(fun = dgamma, args = list(shape = a2 + sum_y, 
+                                          rate = b2 + n),
+                aes(color = "Posterior 2", linetype = "Posterior 2")) +
+  scale_colour_manual(values = c("#0072B2", "#D55E00", "#0072B2", "#D55E00"),
+                      guide = guide_legend(override.aes = list(
+                        linetype = c(1, 1, 2, 2)))) + 
+  scale_linetype_manual(values = c(1, 1, 2, 2), guide = FALSE) + 
+  xlab(expression(lambda)) + ylab("Density") +
+  theme_bw(base_size = 12, base_family = "") +
+  theme(legend.position = c(0.2, 0.6)) +
+  theme(legend.title = element_blank())
+```
+
+- \textcolor{blue}{Discussion question}: Which prior has *stronger* influence? What about the change of spread from prior to posterior?
+
+## A gamma-Poisson conjugate model: inference
+
+- Interested in posterior mean and variance
+
+1. Analytically
+
+```{r, size = "footnotesize"}
+a <- 1
+b <- 1
+(a + sum_y) / (b + n)
+(a + sum_y) / (b + n)^2
+```
+
+## A gamma-Poisson conjugate model: posterior inference
+
+2. Simulation-based
+
+```{r, size = "footnotesize"}
+S <- 1000
+lambda_draws <- stats::rgamma(n = S, shape = (a + sum_y), rate = (b + n))
+
+mean(lambda_draws)
+var(lambda_draws)
+```
+
+- The larger the Monte Carlo sample is, i.e., the larger $S$ is, the better the Monte Carlo approximation
+
+## A gamma-Poisson conjugate model: posterior prediction
+
+- Can we predict the next year's bike share rental counts, i.e., make a predicted sample of 250 rental counts?
+
+- For $i = 1, \cdots, n$ where $n = 250$, we first simulate a posterior draw of $\lambda$, denoted as $\lambda^*$ and next simulate a value for each prediction $Y_i^*$
+
+\begin{eqnarray*}
+&\rightarrow& \text{sample}\,\, Y_1^{*} \sim \textrm{Poisson}(\lambda^*)\\
+&\vdots&\\
+\text{sample}\,\, \lambda^* \sim \textrm{Gamma}(a + \sum_{i=1}^{n}y_i, b + n) &\rightarrow& \text{sample}\,\, Y_i^{*} \sim \textrm{Poisson}(\lambda^*)\\
+&\vdots& \\
+&\rightarrow& \text{sample}\,\, Y_n^{*} \sim \textrm{Poisson}(\lambda^*)
+\end{eqnarray*}
+
+## A gamma-Poisson conjugate model: posterior prediction
+
+- In R
+    - ```rgamma()``` function to simulate a posterior draw of $\lambda^*$
+    - ```rpois()``` function to simulate predicted $Y_1^{*}, \cdots, Y_n^{*}$
+    - ```set.seed()``` with a particular seed value to obtain reproducible results
+    
+```{r, size = "footnotesize"}
+set.seed(248)
+lambda_draw <- stats::rgamma(n = 1, shape = (a + sum_y), rate = (b + n))
+y_pred <- stats::rpois(n = n, lambda = lambda_draw)
+```
+
+## A gamma-Poisson conjugate model: posterior prediction
+
+```{r eval = TRUE, echo = FALSE, message = FALSE, warning = FALSE, fig.height = 3, fig.width = 6}
+df <- data.frame(obs = bikesharing_data$count, pred = y_pred)
+df_long <- reshape2::melt(df)
+
+ggplot2::ggplot(df_long, aes(x = variable, y = value, 
+                             fill = variable, color = variable)) +
+  geom_boxplot(width = 0.1) + 
+  stat_summary(fun = mean, geom="point", size=3, color = "gray") +
+  scale_colour_manual(values = c("#E69F00", "#999999")) + 
+  scale_fill_manual(values = c("#E69F00", "#999999")) +
+  xlab("") + ylab("count") + 
+  theme_bw(base_size = 12, base_family = "") +
+  theme(legend.position = "none") + ylim(0, 90)
+```
+
+- Mean seems okay, spread (variance) not so much
+
+- Issues with Poisson data model (mean and variance are both $\lambda$)
+
+## A gamma-Poisson conjugate model: prior choices
+
+- Prior distributions are used to encode our subjective belief about the unknown parameter
+
+- Do not choose *convenient* priors, such as gamma for Poisson due to conjugacy
+
+- If there are other prior distributions that reflect our belief better, we should use those prior choices
+
+- MCMC estimation software can help with posterior estimation
+
+\pause
+
+- Next, we try using additional information to better model the counts as well as better prediction results
+
+## A Poisson regression model: motivation
+
+```{r eval = TRUE, echo = FALSE, message = FALSE, warning = FALSE, fig.height = 3, fig.width = 6}
+df <- data.frame(bikesharing_data$temperature, 
+                 bikesharing_data$count)
+names(df) <- c("temperature", "count")
+
+ggplot2::ggplot(df, aes(x = temperature, y = count)) +
+  geom_point(color = "#E69F00") +
+  theme_bw(base_size = 12, base_family = "") + ylim(0, 90)
+```
+
+- A positive relationship between counts and temperature: as temperature increases, the counts of bike rentals increase as well
+
+- \textcolor{blue}{Discussion question}: How can we utilize such useful information in modeling and predicting counts?
+
+## A Poisson regression model: model specification
+
+- An observation-specific Poisson data model can be expressed as:
+\begin{equation}
+Y_{i} \overset{ind}{\sim} \textrm{Poisson}(\lambda_i), 
+\end{equation}
+where $\lambda_i > 0$ is the rate parameter of the Poisson model for observation $i \,\, (i = 1, \cdots, n)$. The $ind$ symbol indicates that observations are independent from each other
+
+
+\pause
+
+- Given their relationship, we would want to express $\lambda_i$ in terms of the temperature of day $i$
+
+- One way to do so is to express $\log(\lambda_i)$ as a linear function of temperature $i$, denoted by $X_i$:
+\begin{equation}
+\log(\lambda_i) = \beta_0 + \beta_1 X_i,
+\end{equation}
+where $\{\beta_0, \beta_1\}$ are the parameters of our model ($\lambda_i$'s are not parameters)
+
+- \textcolor{blue}{Discussion question}: Why $\log(\lambda_i)$ instead of $\lambda_i$?
+
+## A Poisson regression model: MCMC estimation (brms)
+
+```{r results = 'hide', message = FALSE, warning = FALSE, size = "footnotesize"}
+PoissonReg_fit <- brms::brm(data = bikesharing_data,
+                            family = poisson(link = "log"),
+                            count ~ 1 + temperature,
+                            prior = c(prior(normal(0, 10), 
+                                            class = Intercept),
+                                      prior(normal(0, 10), class = b)),
+                            iter = 5000, 
+                            warmup = 3000, 
+                            thin = 1, 
+                            chains = 1, 
+                            seed = 123)
+```
+
+
+## A Poisson regression model: MCMC estimation (brms)
+
+- ```brm()``` function is the main function we use from the ```brms``` package
+
+- ```data = bikesharing_data```: dataset
+
+- ```family = poisson(link = "log")```: data model
+
+- ```count ~ 1 + temperature```: model expression
+
+- Prior statements (if left blank, default priors will be used)
+
+- ```iter, warmup, thin, chains, seed```: MCMC configurations
+
+
+## A Poisson regression model: MCMC estimation (brms)
+
+```{r, size = "footnotesize"}
+post_PoissonReg <- brms::posterior_samples(x = PoissonReg_fit)
+post_PoissonReg[1:3, ]
+```
+
+- ```posterior_samples()``` to extract posterior parameter draws
+
+- \textcolor{blue}{Discussion question}: how many rows in ```post_PoissonReg```?
+
+\pause
+
+- Later in prediction, we will need to exponeniate $\log(\lambda_i) = \beta_0 + \beta_1 X_i$ to obtain $\lambda_i$ to be used in ```rpois()``` to predict a new value $Y^*_i$
+
+## A Poisson regression model: MCMC diagnostics
+
+```{r eval = TRUE, echo = FALSE, fig.height = 3, fig.width = 6}
+bayesplot::mcmc_trace(x = PoissonReg_fit, 
+                      pars = c("b_Intercept", "b_temperature"))
+```
+
+## A Poisson regression model: MCMC diagnostics
+
+```{r eval = TRUE, echo = FALSE, fig.height = 3, fig.width = 6}
+bayesplot::mcmc_acf(x = PoissonReg_fit, 
+                    pars = c("b_Intercept", "b_temperature"))
+```
+
+## A Poisson regression model: posterior inference
+
+```{r eval = TRUE, echo = FALSE, fig.height = 3, fig.width = 6}
+bayesplot::mcmc_areas(x = PoissonReg_fit, 
+                      pars = c("b_Intercept", "b_temperature"), 
+                      prob = 0.95)
+```
+
+- The thickened middle bar in each plot is the mode, while the shaded area gives the central $95\%$ credible interval: there is a $95\%$ posterior probability that the parameter falls into this interval
+
+
+## A Poisson regression model: posterior prediction
+
+\begin{eqnarray*}
+\text{compute}\,\, \log(\lambda_1^*) = \beta_0^* + \beta_1^* X_1 &\rightarrow& \text{sample}\,\, Y_1^* \sim {\textrm{Poisson}}(\lambda_1^*)\\
+&\vdots& \\
+\text{compute}\,\, \log(\lambda_i^*) = \beta_0^* + \beta_1^* X_i &\rightarrow& \text{sample}\,\, Y_i^* \sim {\textrm{Poisson}}(\lambda_i^*)\\
+&\vdots& \\
+\text{compute}\,\, \log(\lambda_n^*) = \beta_0^* + \beta_1^* X_n &\rightarrow& \text{sample}\,\, Y_n^* \sim {\textrm{Poisson}}(\lambda_n^*)\\
+\end{eqnarray*}
+
+- $\{\beta_0^*, \beta_1^*\}$ represent one set of posterior draws of the two parameters
+
+
+## A Poisson regression model: posterior prediction
+
+Below shows how we can generate one predicted dataset using the first pair of $\{\beta_0^*, \beta_1^*\}$ posterior draws
+
+```{r, size = "footnotesize"}
+y_pred_PoissonReg <- rep(NA, n)
+for (i in 1:n){
+  y_pred_PoissonReg[i] <- rpois(n = 1, 
+                                lambda = 
+                                  exp(post_PoissonReg[1, "b_Intercept"] +
+                                        post_PoissonReg[1, "b_temperature"] * 
+                                        bikesharing_data$temperature[i]))
+}
+```
+
+## A Poisson regression model: posterior prediction
+
+```{r eval = TRUE, echo = FALSE, warning = FALSE, message = FALSE, fig.height = 3, fig.width = 6}
+df <- data.frame(observed = bikesharing_data$count, 
+                 pred_GammaPoisson = y_pred, 
+                 pred_PoissonReg = y_pred_PoissonReg)
+df_long <- reshape2::melt(df)
+
+ggplot2::ggplot(df_long, aes(x = variable, y = value, 
+                             fill = variable, color = variable)) +
+  geom_boxplot(width = 0.1) + 
+  stat_summary(fun = mean, geom="point", size=1, color = "gray") +
+  scale_colour_manual(values = c("#E69F00", "#999999",  "#56B4E9")) +
+  scale_fill_manual(values = c("#E69F00", "#999999",  "#56B4E9")) +
+  xlab("") + ylab("count") +  
+  theme_bw(base_size = 15, base_family = "") +
+  theme(legend.position = "none") + ylim(0, 90)
+```
+
+- \textcolor{blue}{Discussion question}: What are your findings between the gamma-Poisson conjugate model and the Poisson regression model for this bike rental sharing dataset?
+
+# Summary and References
+
+## Summary
+
+- Posterior predictive
+
+- Synthetic data
+
+- Case study
+    - Gamma-Poisson conjugate model
+    - Poisson regression model
+    - Posterior prediction, prior choices, posterior inference, MCMC, MCMC diagnostics
+    
+\pause
+
+- Homework 3: a few derivation and R programming exercises
+     - Submission on Moodle and prepare to discuss next time
+
+- Lecture 4: Bayesian synthesis models part 1: continuous and binary
+    - Section 3 of @Kinney2011ISR
+    - Section 12.4 of @AlbertHu2019: https://bayesball.github.io/BOOK/proportion.html (a different MCMC software is used)
+    
+## References {.allowframebreaks} 

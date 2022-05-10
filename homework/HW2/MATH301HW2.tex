@@ -1,0 +1,88 @@
+\documentclass[11pt]{article}
+\usepackage[top=2.1cm,bottom=2cm,left=2cm,right= 2cm]{geometry}
+%\geometry{landscape}                % Activate for for rotated page geometry
+\usepackage[parfill]{parskip}    % Activate to begin paragraphs with an empty line rather than an indent
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{epstopdf}
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{hyperref}
+\usepackage{changepage}
+\usepackage{lscape}
+\usepackage{ulem}
+\usepackage{multicol}
+\usepackage{dashrule}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{enumerate}
+\newcommand{\urlwofont}[1]{\urlstyle{same}\url{#1}}
+\newcommand{\degree}{\ensuremath{^\circ}}
+\newcommand{\hl}[1]{\textbf{\underline{#1}}}
+
+
+
+\DeclareGraphicsRule{.tif}{png}{.png}{`convert #1 `dirname #1`/`basename #1 .tif`.png}
+
+\newenvironment{choices}{
+\begin{enumerate}[(a)]
+}{\end{enumerate}}
+
+%\newcommand{\soln}[1]{\textcolor{MidnightBlue}{\textit{#1}}}	% delete #1 to get rid of solutions for handouts
+\newcommand{\soln}[1]{ \vspace{1.35cm} }
+
+%\newcommand{\solnMult}[1]{\textbf{\textcolor{MidnightBlue}{\textit{#1}}}}	% uncomment for solutions
+\newcommand{\solnMult}[1]{ #1 }	% uncomment for handouts
+
+%\newcommand{\pts}[1]{ \textbf{{\footnotesize \textcolor{black}{(#1)}}} }	% uncomment for handouts
+\newcommand{\pts}[1]{ \textbf{{\footnotesize \textcolor{blue}{(#1)}}} }	% uncomment for handouts
+
+\newcommand{\note}[1]{ \textbf{\textcolor{red}{[#1]}} }	% uncomment for handouts
+
+\begin{document}
+
+
+\enlargethispage{\baselineskip}
+
+Fall 2021 \hfill Jingchen (Monika) Hu\\
+
+\begin{center}
+{\huge MATH 301 Homework 2}	\\
+Due: Sunday 9/19, 11:59pm; submission on Moodle under Discussion Forum
+\end{center}
+\vspace{0.5cm}
+
+\begin{enumerate}
+\item Apply the discrete Bayes' rule calculation for $y = 1$ and $\theta = \{0.3, 0.5, 0.7\}$ with a prior probabilities of (0.25, 0.25, 0.5). Verify your results using R. Discuss your findings when compared to the prior used in class.
+
+\item Prove the discrete Bayes' rule presented in class using properties of probability.
+
+\item Apply the continuous Bayes' rule calculation for $y = 1$ and the prior of $\theta \sim \textrm{Beta}(1, 1)$. Produce a graph containing both the prior and the posterior. Discuss your findings.
+
+\item Consider a coin flipping experiment with parameter $\theta$ as the probability of getting a head on each trial. Assume a $\textrm{Beta}(1, 1)$ (i.e., $\textrm{Uniform}(0, 1)$) prior for $\theta$. Using the beta-binomial conjugacy result, calculate the posterior for $\theta$ after observing 5 heads in a roll. Perform two types of calculation: 
+
+\begin{enumerate}[(a)]
+\item Consider the observed data as $y = 5$ and use the beta-binomial conjugacy result once.
+
+\item Consider the observed data as a sequence of 1's, and use the beta-binomial conjugacy result at each of the 5 updates.
+
+\item Do you arrive at the same posterior distribution for $\theta$? What does this tell us about sequential update?
+
+\end{enumerate}
+
+\item In class we highlight that Bayesian inference is subjective. While it is appealing to incorporate useful information about the unknown parameter through specifying a prior, it is also important to let two analysts arrive at similar posterior inference given the same set of data, even if their prior beliefs are different. In this exercise, we will explore the prior influence vs data influence in Bayesian inference.
+
+Consider the coin flipping experiment, where Analyst A decides to use a $\textrm{Beta}(2, 8)$ prior and Analyst B decides to use a $\textrm{Beta}(8, 2)$ prior for the parameter $\theta$, the probability of obtaining a head. As the figure shown in class displays, these two prior distributions represent different prior beliefs.
+
+a. Describe the prior beliefs $\textrm{Beta}(2, 8)$ and $\textrm{Beta}(8, 2)$ represent.
+
+b. Suppose $n = 10$ coin flipping trials are conducted and the number of heads is $y = 7$. Using the beta-binomial conjugacy result, calculate the posterior distribution for $\theta$ for Analyst A and Analyst B. Discuss how similar the two posterior distributions are and how prior influences Bayesian inference. Consider plotting them using sample code to make comparison (check out example code in class).
+
+c. Suppose $n = 100$ coin flipping trials are conducted and the number of heads is $y = 70$. Using the beta-binomial conjugacy result, calculate the posterior distribution for $\theta$ for Analyst A and Analyst B. Discuss how similar the two posterior distributions are and how prior influences Bayesian inference. Consider plotting them using sample code to make comparison (check out example code in class).
+
+d. The two collected datasets, $(n = 10, y = 7)$ and $(n = 100, y = 70)$, contains essentially the same information: 70\% of the flips are heads. Given your results from b and c above, discuss which dataset produces much more similar posterior distributions. Based on your result, how do you think the data influences Bayesian inference.
+
+\end{enumerate}
+
+Be prepared to discuss these questions in class on Monday 9/20.
+
+\end{document} 
